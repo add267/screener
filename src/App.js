@@ -372,7 +372,6 @@ const DLMMWalletScreenerPro = () => {
       const wallets = Array.from(walletMap.entries())
         .map(([address, data]) => {
           const numPositions = data.positions.length;
-          const avgPositionValue = data.totalValue / numPositions;
 
           // Estimate profit based on position values (simplified)
           const estimatedProfit = data.totalValue * (Math.random() * 0.3 + 0.1); // 10-40% profit estimate
