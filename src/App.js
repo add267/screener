@@ -239,13 +239,6 @@ const DLMMWalletScreenerPro = () => {
     }
   }, [fetchWalletFromHelius, fetchMeteoraPositions, fetchBirdeyeWalletData, calculateWalletMetrics]);
 
-  // Generate mock data (fallback) - REMOVED - Only real data now
-  // This function is kept for backward compatibility in tracked wallets
-  const generateMockWallets = useCallback(() => {
-    console.warn('⚠️ generateMockWallets called - should not be used for discovery');
-    return []; // Return empty array - no more mock data
-  }, []);
-
   // Scan for profitable wallets using on-chain data - REAL DATA ONLY
   const scanProfitableWallets = useCallback(async () => {
     setLoading(true);
@@ -485,17 +478,6 @@ const DLMMWalletScreenerPro = () => {
       console.error('Verification error:', error.message);
       return false;
     }
-  };
-
-
-  // Generate random Solana address for mock data
-  const generateRandomSolanaAddress = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
-    let address = '';
-    for (let i = 0; i < 44; i++) {
-      address += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return address;
   };
 
   // Initial scan
