@@ -62,95 +62,34 @@ const DLMMWalletScreenerPro = () => {
     });
   }, [API_CONFIG.HELIUS_API_KEY, API_CONFIG.METEORA_API, API_CONFIG.BIRDEYE_API_KEY]);
 
-  // Fetch wallet data from Helius API
-  const fetchWalletFromHelius = async (walletAddress) => {
-    try {
-      const response = await fetch(API_CONFIG.HELIUS_RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'wallet-balance',
-          method: 'getBalance',
-          params: [walletAddress]
-        })
-      });
 
-      const data = await response.json();
-      return data.result;
-    } catch (error) {
-      console.error('Helius API error:', error);
-      return null;
-    }
-  };
+  // Determine primary strategy from positions
+  const determineStrategy = useCallback((positions) => {
+    if (!positions || positions.length === 0) return 'Unknown';
 
-  // Fetch DLMM positions from Meteora
-  const fetchMeteoraPositions = async (walletAddress) => {
-    try {
-      // Example endpoint - adjust based on Meteora's actual API
-      const response = await fetch(`${API_CONFIG.METEORA_API}/positions/${walletAddress}`);
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Meteora API error:', error);
-      return null;
-    }
-  };
+    const dlmmCount = positions.filter(p => p.type === 'DLMM').length;
+    const dammCount = positions.filter(p => p.type === 'DAMM').length;
 
-  // Fetch wallet analytics from Birdeye
-  const fetchBirdeyeWalletData = async (walletAddress) => {
-    try {
-      const headers = {
-        'X-API-KEY': API_CONFIG.BIRDEYE_API_KEY
-      };
+    if (dlmmCount > dammCount * 2) return 'DLMM';
+    if (dammCount > dlmmCount * 2) return 'DAMM';
+    return 'Hybrid';
+  }, []);
 
-      // Fetch wallet portfolio
-      const portfolioResponse = await fetch(
-        `${API_CONFIG.BIRDEYE_API}/v1/wallet/token_list?wallet=${walletAddress}`,
-        { headers }
-      );
-      const portfolio = await portfolioResponse.json();
+  // Calculate last active time
+  const calculateLastActive = useCallback((transactions) => {
+    if (!transactions || transactions.length === 0) return 'Unknown';
 
-      // Fetch transaction history
-      const txResponse = await fetch(
-        `${API_CONFIG.BIRDEYE_API}/v1/wallet/tx_list?wallet=${walletAddress}&limit=100`,
-        { headers }
-      );
-      const transactions = await txResponse.json();
+    const lastTx = transactions[0];
+    const timeDiff = Date.now() - (lastTx.blockTime * 1000);
+    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
 
-      return { portfolio, transactions };
-    } catch (error) {
-      console.error('Birdeye API error:', error);
-      return null;
-    }
-  };
-
-  // Comprehensive wallet analysis
-  const analyzeWallet = async (walletAddress) => {
-    try {
-      // Fetch data from multiple sources
-      const [heliusData, meteoraData, birdeyeData] = await Promise.all([
-        fetchWalletFromHelius(walletAddress),
-        fetchMeteoraPositions(walletAddress),
-        fetchBirdeyeWalletData(walletAddress)
-      ]);
-
-      // Calculate metrics from the data
-      const analysis = calculateWalletMetrics(heliusData, meteoraData, birdeyeData);
-
-      return {
-        address: walletAddress,
-        shortAddress: `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`,
-        ...analysis
-      };
-    } catch (error) {
-      console.error('Wallet analysis error:', error);
-      return null;
-    }
-  };
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }, []);
 
   // Calculate wallet performance metrics
-  const calculateWalletMetrics = (heliusData, meteoraData, birdeyeData) => {
+  const calculateWalletMetrics = useCallback((heliusData, meteoraData, birdeyeData) => {
     // This is where you'd implement the actual calculation logic
     // based on the data returned from the APIs
 
@@ -190,32 +129,94 @@ const DLMMWalletScreenerPro = () => {
       topPool: positions[0]?.pool || 'N/A',
       lastActive: calculateLastActive(transactions)
     };
-  };
+  }, [determineStrategy, calculateLastActive]);
 
-  // Determine primary strategy from positions
-  const determineStrategy = (positions) => {
-    if (!positions || positions.length === 0) return 'Unknown';
+  // Fetch wallet data from Helius API
+  const fetchWalletFromHelius = useCallback(async (walletAddress) => {
+    try {
+      const response = await fetch(API_CONFIG.HELIUS_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'wallet-balance',
+          method: 'getBalance',
+          params: [walletAddress]
+        })
+      });
 
-    const dlmmCount = positions.filter(p => p.type === 'DLMM').length;
-    const dammCount = positions.filter(p => p.type === 'DAMM').length;
+      const data = await response.json();
+      return data.result;
+    } catch (error) {
+      console.error('Helius API error:', error);
+      return null;
+    }
+  }, [API_CONFIG.HELIUS_RPC_URL]);
 
-    if (dlmmCount > dammCount * 2) return 'DLMM';
-    if (dammCount > dlmmCount * 2) return 'DAMM';
-    return 'Hybrid';
-  };
+  // Fetch DLMM positions from Meteora
+  const fetchMeteoraPositions = useCallback(async (walletAddress) => {
+    try {
+      // Example endpoint - adjust based on Meteora's actual API
+      const response = await fetch(`${API_CONFIG.METEORA_API}/positions/${walletAddress}`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Meteora API error:', error);
+      return null;
+    }
+  }, [API_CONFIG.METEORA_API]);
 
-  // Calculate last active time
-  const calculateLastActive = (transactions) => {
-    if (!transactions || transactions.length === 0) return 'Unknown';
+  // Fetch wallet analytics from Birdeye
+  const fetchBirdeyeWalletData = useCallback(async (walletAddress) => {
+    try {
+      const headers = {
+        'X-API-KEY': API_CONFIG.BIRDEYE_API_KEY
+      };
 
-    const lastTx = transactions[0];
-    const timeDiff = Date.now() - (lastTx.blockTime * 1000);
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+      // Fetch wallet portfolio
+      const portfolioResponse = await fetch(
+        `${API_CONFIG.BIRDEYE_API}/v1/wallet/token_list?wallet=${walletAddress}`,
+        { headers }
+      );
+      const portfolio = await portfolioResponse.json();
 
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
+      // Fetch transaction history
+      const txResponse = await fetch(
+        `${API_CONFIG.BIRDEYE_API}/v1/wallet/tx_list?wallet=${walletAddress}&limit=100`,
+        { headers }
+      );
+      const transactions = await txResponse.json();
+
+      return { portfolio, transactions };
+    } catch (error) {
+      console.error('Birdeye API error:', error);
+      return null;
+    }
+  }, [API_CONFIG.BIRDEYE_API, API_CONFIG.BIRDEYE_API_KEY]);
+
+  // Comprehensive wallet analysis
+  const analyzeWallet = useCallback(async (walletAddress) => {
+    try {
+      // Fetch data from multiple sources
+      const [heliusData, meteoraData, birdeyeData] = await Promise.all([
+        fetchWalletFromHelius(walletAddress),
+        fetchMeteoraPositions(walletAddress),
+        fetchBirdeyeWalletData(walletAddress)
+      ]);
+
+      // Calculate metrics from the data
+      const analysis = calculateWalletMetrics(heliusData, meteoraData, birdeyeData);
+
+      return {
+        address: walletAddress,
+        shortAddress: `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`,
+        ...analysis
+      };
+    } catch (error) {
+      console.error('Wallet analysis error:', error);
+      return null;
+    }
+  }, [fetchWalletFromHelius, fetchMeteoraPositions, fetchBirdeyeWalletData, calculateWalletMetrics]);
 
   // Generate mock data (fallback)
   const generateMockWallets = useCallback(() => {
@@ -293,7 +294,7 @@ const DLMMWalletScreenerPro = () => {
     }
 
     setLoading(false);
-  }, [API_CONFIG.METEORA_API, generateMockWallets]);
+  }, [API_CONFIG.METEORA_API, analyzeWallet, generateMockWallets]);
 
 
   // Generate random Solana address for mock data
