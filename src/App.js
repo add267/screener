@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, TrendingUp, DollarSign, Activity, ExternalLink, Filter, RefreshCw, Copy, Check, Star, StarOff, Plus, X, AlertCircle } from 'lucide-react';
+import { Search, TrendingUp, DollarSign, Activity, ExternalLink, Filter, RefreshCw, Copy, Check, Star, StarOff, Plus, X, AlertCircle, Settings, Save } from 'lucide-react';
 
 const DLMMWalletScreenerPro = () => {
   const [wallets, setWallets] = useState([]);
@@ -9,11 +9,20 @@ const DLMMWalletScreenerPro = () => {
   const [copiedAddress, setCopiedAddress] = useState(null);
   const [activeTab, setActiveTab] = useState('discover'); // 'discover' or 'tracked'
   const [showAddWallet, setShowAddWallet] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [newWalletAddress, setNewWalletAddress] = useState('');
   const [apiStatus, setApiStatus] = useState({
     helius: 'connected',
     meteora: 'connected',
     birdeye: 'connected'
+  });
+
+  // User-provided API keys (stored in localStorage)
+  const [userApiKeys, setUserApiKeys] = useState({
+    heliusKey: '',
+    birdeyeKey: '',
+    meteoraApi: '',
+    birdeyeApi: ''
   });
 
   const [filters, setFilters] = useState({
@@ -37,20 +46,32 @@ const DLMMWalletScreenerPro = () => {
     }
   }, []);
 
+  // Load API keys from localStorage
+  useEffect(() => {
+    const savedKeys = localStorage.getItem('userApiKeys');
+    if (savedKeys) {
+      try {
+        setUserApiKeys(JSON.parse(savedKeys));
+      } catch (e) {
+        console.error('Failed to load API keys:', e);
+      }
+    }
+  }, []);
+
   // Save tracked wallets to localStorage
   useEffect(() => {
     localStorage.setItem('trackedWallets', JSON.stringify(trackedWallets));
   }, [trackedWallets]);
 
-  // API Configuration - Uses environment variables set in Vercel
+  // API Configuration - Uses localStorage first, then environment variables
   const API_CONFIG = {
-    HELIUS_API_KEY: process.env.REACT_APP_HELIUS_API_KEY || '',
-    HELIUS_RPC_URL: process.env.REACT_APP_HELIUS_API_KEY
-      ? `https://mainnet.helius-rpc.com/?api-key=${process.env.REACT_APP_HELIUS_API_KEY}`
+    HELIUS_API_KEY: userApiKeys.heliusKey || process.env.REACT_APP_HELIUS_API_KEY || '',
+    HELIUS_RPC_URL: (userApiKeys.heliusKey || process.env.REACT_APP_HELIUS_API_KEY)
+      ? `https://mainnet.helius-rpc.com/?api-key=${userApiKeys.heliusKey || process.env.REACT_APP_HELIUS_API_KEY}`
       : '',
-    METEORA_API: process.env.REACT_APP_METEORA_API || 'https://app.meteora.ag/api',
-    BIRDEYE_API: process.env.REACT_APP_BIRDEYE_API || 'https://public-api.birdeye.so',
-    BIRDEYE_API_KEY: process.env.REACT_APP_BIRDEYE_API_KEY || ''
+    METEORA_API: userApiKeys.meteoraApi || process.env.REACT_APP_METEORA_API || 'https://app.meteora.ag/api',
+    BIRDEYE_API: userApiKeys.birdeyeApi || process.env.REACT_APP_BIRDEYE_API || 'https://public-api.birdeye.so',
+    BIRDEYE_API_KEY: userApiKeys.birdeyeKey || process.env.REACT_APP_BIRDEYE_API_KEY || ''
   };
 
   // Check API configuration status
@@ -60,7 +81,7 @@ const DLMMWalletScreenerPro = () => {
       meteora: API_CONFIG.METEORA_API ? 'connected' : 'disconnected',
       birdeye: API_CONFIG.BIRDEYE_API_KEY ? 'connected' : 'disconnected'
     });
-  }, [API_CONFIG.HELIUS_API_KEY, API_CONFIG.METEORA_API, API_CONFIG.BIRDEYE_API_KEY]);
+  }, [API_CONFIG.HELIUS_API_KEY, API_CONFIG.METEORA_API, API_CONFIG.BIRDEYE_API_KEY, userApiKeys]);
 
 
   // Determine primary strategy from positions
@@ -448,6 +469,30 @@ const DLMMWalletScreenerPro = () => {
     }
   };
 
+  // Handle API key input changes
+  const handleApiKeyChange = (key, value) => {
+    setUserApiKeys(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Save API keys to localStorage
+  const saveApiKeys = () => {
+    localStorage.setItem('userApiKeys', JSON.stringify(userApiKeys));
+    setShowSettings(false);
+    // Trigger a refresh to use new keys
+    window.location.reload();
+  };
+
+  // Clear API keys from localStorage
+  const clearApiKeys = () => {
+    setUserApiKeys({
+      heliusKey: '',
+      birdeyeKey: '',
+      meteoraApi: '',
+      birdeyeApi: ''
+    });
+    localStorage.removeItem('userApiKeys');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
@@ -462,6 +507,14 @@ const DLMMWalletScreenerPro = () => {
               <p className="text-gray-400">Production-ready wallet discovery and tracking system</p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-all"
+                title="Configure API Keys"
+              >
+                <Settings size={20} />
+                Settings
+              </button>
               <button
                 onClick={activeTab === 'discover' ? scanProfitableWallets : refreshTrackedWallets}
                 disabled={loading}
@@ -489,9 +542,15 @@ const DLMMWalletScreenerPro = () => {
                 <div className={`w-2 h-2 rounded-full ${apiStatus.birdeye === 'connected' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 <span className="text-sm text-gray-300">Birdeye API</span>
               </div>
-              <div className="ml-auto text-xs text-gray-500">
-                <AlertCircle size={14} className="inline mr-1" />
-                Configure API keys in the code to enable real-time data
+              <div className="ml-auto text-xs text-gray-500 flex items-center gap-2">
+                <AlertCircle size={14} className="inline" />
+                <span>Configure API keys in Settings to enable real-time data</span>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Open Settings
+                </button>
               </div>
             </div>
           </div>
@@ -660,6 +719,141 @@ const DLMMWalletScreenerPro = () => {
                   <option value="DAMM">DAMM Only</option>
                   <option value="Hybrid">Hybrid Only</option>
                 </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Settings className="text-blue-400" size={28} />
+                  <h3 className="text-2xl font-bold text-white">API Configuration</h3>
+                </div>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="mb-6 bg-blue-900 bg-opacity-30 border border-blue-700 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="text-blue-400 mt-1" size={20} />
+                  <div className="text-sm text-blue-200">
+                    <p className="font-semibold mb-2">Configure your API keys here</p>
+                    <p>API keys are stored locally in your browser and are not sent to any server. They take priority over environment variables.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Helius API Key */}
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">
+                    Helius API Key
+                    <span className={`ml-2 text-xs ${apiStatus.helius === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
+                      ({apiStatus.helius === 'connected' ? '✓ Configured' : '✗ Not configured'})
+                    </span>
+                  </label>
+                  <input
+                    type="password"
+                    value={userApiKeys.heliusKey}
+                    onChange={(e) => handleApiKeyChange('heliusKey', e.target.value)}
+                    placeholder="Enter your Helius API key..."
+                    className="w-full bg-gray-700 text-white px-4 py-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Get your free API key at <a href="https://helius.dev" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">helius.dev</a>
+                  </p>
+                </div>
+
+                {/* Birdeye API Key */}
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">
+                    Birdeye API Key
+                    <span className={`ml-2 text-xs ${apiStatus.birdeye === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
+                      ({apiStatus.birdeye === 'connected' ? '✓ Configured' : '✗ Not configured'})
+                    </span>
+                  </label>
+                  <input
+                    type="password"
+                    value={userApiKeys.birdeyeKey}
+                    onChange={(e) => handleApiKeyChange('birdeyeKey', e.target.value)}
+                    placeholder="Enter your Birdeye API key..."
+                    className="w-full bg-gray-700 text-white px-4 py-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Get your API key at <a href="https://birdeye.so" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">birdeye.so</a>
+                  </p>
+                </div>
+
+                {/* Advanced Settings */}
+                <div className="border-t border-gray-700 pt-6">
+                  <h4 className="text-lg font-semibold text-white mb-4">Advanced Settings (Optional)</h4>
+
+                  <div className="space-y-4">
+                    {/* Meteora API URL */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">
+                        Meteora API URL
+                      </label>
+                      <input
+                        type="text"
+                        value={userApiKeys.meteoraApi}
+                        onChange={(e) => handleApiKeyChange('meteoraApi', e.target.value)}
+                        placeholder="https://app.meteora.ag/api"
+                        className="w-full bg-gray-700 text-white px-4 py-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Default: https://app.meteora.ag/api
+                      </p>
+                    </div>
+
+                    {/* Birdeye API URL */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">
+                        Birdeye API URL
+                      </label>
+                      <input
+                        type="text"
+                        value={userApiKeys.birdeyeApi}
+                        onChange={(e) => handleApiKeyChange('birdeyeApi', e.target.value)}
+                        placeholder="https://public-api.birdeye.so"
+                        className="w-full bg-gray-700 text-white px-4 py-3 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Default: https://public-api.birdeye.so
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                <button
+                  onClick={saveApiKeys}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition-all"
+                >
+                  <Save size={20} />
+                  Save & Reload
+                </button>
+                <button
+                  onClick={clearApiKeys}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition-all"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-semibold transition-all"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
