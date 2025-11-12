@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, DollarSign, Activity, ExternalLink, Filter, RefreshCw, Copy, Check, Star, StarOff, Plus, X, BarChart3, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, TrendingUp, DollarSign, Activity, ExternalLink, Filter, RefreshCw, Copy, Check, Star, StarOff, Plus, X, AlertCircle } from 'lucide-react';
 
 const DLMMWalletScreenerPro = () => {
   const [wallets, setWallets] = useState([]);
@@ -42,14 +42,25 @@ const DLMMWalletScreenerPro = () => {
     localStorage.setItem('trackedWallets', JSON.stringify(trackedWallets));
   }, [trackedWallets]);
 
-  // API Configuration
+  // API Configuration - Uses environment variables set in Vercel
   const API_CONFIG = {
-    HELIUS_API_KEY: 'YOUR_HELIUS_API_KEY', // Get from https://helius.dev
-    HELIUS_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY',
-    METEORA_API: 'https://app.meteora.ag/api',
-    BIRDEYE_API: 'https://public-api.birdeye.so',
-    BIRDEYE_API_KEY: 'YOUR_BIRDEYE_API_KEY' // Get from https://birdeye.so
+    HELIUS_API_KEY: process.env.REACT_APP_HELIUS_API_KEY || '',
+    HELIUS_RPC_URL: process.env.REACT_APP_HELIUS_API_KEY
+      ? `https://mainnet.helius-rpc.com/?api-key=${process.env.REACT_APP_HELIUS_API_KEY}`
+      : '',
+    METEORA_API: process.env.REACT_APP_METEORA_API || 'https://app.meteora.ag/api',
+    BIRDEYE_API: process.env.REACT_APP_BIRDEYE_API || 'https://public-api.birdeye.so',
+    BIRDEYE_API_KEY: process.env.REACT_APP_BIRDEYE_API_KEY || ''
   };
+
+  // Check API configuration status
+  useEffect(() => {
+    setApiStatus({
+      helius: API_CONFIG.HELIUS_API_KEY ? 'connected' : 'disconnected',
+      meteora: API_CONFIG.METEORA_API ? 'connected' : 'disconnected',
+      birdeye: API_CONFIG.BIRDEYE_API_KEY ? 'connected' : 'disconnected'
+    });
+  }, [API_CONFIG.HELIUS_API_KEY, API_CONFIG.METEORA_API, API_CONFIG.BIRDEYE_API_KEY]);
 
   // Fetch wallet data from Helius API
   const fetchWalletFromHelius = async (walletAddress) => {
@@ -206,8 +217,35 @@ const DLMMWalletScreenerPro = () => {
     return `${days}d ago`;
   };
 
+  // Generate mock data (fallback)
+  const generateMockWallets = useCallback(() => {
+    const strategies = ['DLMM', 'DAMM', 'Hybrid'];
+    const pools = ['SOL/USDC', 'ETH/USDC', 'BTC/USDC', 'RAY/USDC', 'BONK/USDC', 'JTO/USDC', 'PYTH/USDC'];
+
+    return Array.from({ length: 50 }, (_, i) => {
+      const profit = Math.floor(Math.random() * 50000) + 500;
+      const invested = profit / (Math.random() * 2 + 0.5);
+
+      return {
+        id: i + 1,
+        address: generateRandomSolanaAddress(),
+        shortAddress: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
+        strategy: strategies[Math.floor(Math.random() * strategies.length)],
+        profit: profit,
+        roi: ((profit / invested) * 100).toFixed(2),
+        volume: Math.floor(Math.random() * 500000) + 10000,
+        winRate: (Math.random() * 40 + 50).toFixed(1),
+        positions: Math.floor(Math.random() * 50) + 5,
+        activeDays: Math.floor(Math.random() * 180) + 30,
+        topPool: pools[Math.floor(Math.random() * pools.length)],
+        lastActive: `${Math.floor(Math.random() * 24)}h ago`,
+        tracked: false
+      };
+    }).sort((a, b) => b.profit - a.profit);
+  }, []);
+
   // Scan for profitable wallets using on-chain data
-  const scanProfitableWallets = async () => {
+  const scanProfitableWallets = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -255,34 +293,8 @@ const DLMMWalletScreenerPro = () => {
     }
 
     setLoading(false);
-  };
+  }, [API_CONFIG.METEORA_API, generateMockWallets]);
 
-  // Generate mock data (fallback)
-  const generateMockWallets = () => {
-    const strategies = ['DLMM', 'DAMM', 'Hybrid'];
-    const pools = ['SOL/USDC', 'ETH/USDC', 'BTC/USDC', 'RAY/USDC', 'BONK/USDC', 'JTO/USDC', 'PYTH/USDC'];
-
-    return Array.from({ length: 50 }, (_, i) => {
-      const profit = Math.floor(Math.random() * 50000) + 500;
-      const invested = profit / (Math.random() * 2 + 0.5);
-
-      return {
-        id: i + 1,
-        address: generateRandomSolanaAddress(),
-        shortAddress: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
-        strategy: strategies[Math.floor(Math.random() * strategies.length)],
-        profit: profit,
-        roi: ((profit / invested) * 100).toFixed(2),
-        volume: Math.floor(Math.random() * 500000) + 10000,
-        winRate: (Math.random() * 40 + 50).toFixed(1),
-        positions: Math.floor(Math.random() * 50) + 5,
-        activeDays: Math.floor(Math.random() * 180) + 30,
-        topPool: pools[Math.floor(Math.random() * pools.length)],
-        lastActive: `${Math.floor(Math.random() * 24)}h ago`,
-        tracked: false
-      };
-    }).sort((a, b) => b.profit - a.profit);
-  };
 
   // Generate random Solana address for mock data
   const generateRandomSolanaAddress = () => {
@@ -297,7 +309,7 @@ const DLMMWalletScreenerPro = () => {
   // Initial scan
   useEffect(() => {
     scanProfitableWallets();
-  }, []);
+  }, [scanProfitableWallets]);
 
   // Apply filters
   useEffect(() => {
